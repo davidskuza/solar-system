@@ -86,12 +86,34 @@
       aria-hidden="true"
       aria-labelledby="panel-name"
     >
+      <button
+        id="btn-collapse-bar"
+        class="panel-collapse-bar"
+        type="button"
+        aria-expanded="true"
+        aria-label="Collapse or expand planet info"
+      >
+        <span class="collapse-grabber"></span>
+      </button>
+
       <div class="panel-header">
         <div class="panel-badge-row">
           <span id="panel-classification" class="panel-badge">Terrestrial Planet</span>
-          <button id="btn-close-panel" class="close-btn" title="Close & zoom out (Esc)" aria-label="Close description and zoom out">
-            ✕
-          </button>
+          <div class="panel-header-actions">
+            <button
+              id="btn-collapse-panel"
+              class="collapse-btn"
+              type="button"
+              title="Collapse / Expand info"
+              aria-label="Collapse or expand planet description"
+            >
+              <span id="collapse-btn-label">Hide</span>
+              <span class="collapse-chevron">▾</span>
+            </button>
+            <button id="btn-close-panel" class="close-btn" title="Close & zoom out (Esc)" aria-label="Close description and zoom out">
+              ✕
+            </button>
+          </div>
         </div>
         <div class="panel-title-row">
           <span id="panel-symbol" class="panel-symbol">♁</span>

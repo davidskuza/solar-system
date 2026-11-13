@@ -34,6 +34,9 @@ const audioLabel = document.getElementById('audio-label');
 const audioVolume = document.getElementById('audio-volume');
 const btnClosePanel = document.getElementById('btn-close-panel');
 const btnReturnOverview = document.getElementById('btn-return-overview');
+const btnCollapseBar = document.getElementById('btn-collapse-bar');
+const btnCollapsePanel = document.getElementById('btn-collapse-panel');
+const collapseBtnLabel = document.getElementById('collapse-btn-label');
 
 let renderer;
 try {
@@ -190,8 +193,16 @@ function selectBody(id) {
     panelSubnav.classList.add('hidden');
   }
 
+  setPanelCollapsed(false);
   planetPanel.classList.add('open');
   planetPanel.setAttribute('aria-hidden', 'false');
+}
+
+function setPanelCollapsed(collapsed) {
+  planetPanel.classList.toggle('collapsed', collapsed);
+  btnCollapseBar.setAttribute('aria-expanded', String(!collapsed));
+  collapseBtnLabel.textContent = collapsed ? 'Info' : 'Hide';
+  camera.setPanelCollapsed(collapsed, window.innerWidth);
 }
 
 function closeDescriptionAndZoomOut() {
@@ -203,6 +214,7 @@ function closeDescriptionAndZoomOut() {
     pill.classList.remove('active');
   }
 
+  setPanelCollapsed(false);
   planetPanel.classList.remove('open');
   planetPanel.setAttribute('aria-hidden', 'true');
   camera.returnToOverview();
@@ -367,6 +379,25 @@ audioVolume.addEventListener('input', (e) => {
 
 btnClosePanel.addEventListener('click', closeDescriptionAndZoomOut);
 btnReturnOverview.addEventListener('click', closeDescriptionAndZoomOut);
+
+const togglePanelCollapse = () => {
+  setPanelCollapsed(!planetPanel.classList.contains('collapsed'));
+};
+btnCollapseBar.addEventListener('click', togglePanelCollapse);
+btnCollapsePanel.addEventListener('click', togglePanelCollapse);
+
+// Support swipe down/up on the mobile collapse bar
+let panelSwipeStartY = null;
+btnCollapseBar.addEventListener('pointerdown', (e) => {
+  panelSwipeStartY = e.clientY;
+});
+btnCollapseBar.addEventListener('pointerup', (e) => {
+  if (panelSwipeStartY === null) return;
+  const dy = e.clientY - panelSwipeStartY;
+  panelSwipeStartY = null;
+  if (dy > 24) setPanelCollapsed(true);
+  else if (dy < -24) setPanelCollapsed(false);
+});
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.selectedBody) {

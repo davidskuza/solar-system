@@ -14,6 +14,7 @@ export class CameraController {
     this.pitch = 0.48;
     this.distance = 225;
     this.frustumOffsetX = 0;
+    this.frustumOffsetY = 0;
 
     // Desired spherical coordinates
     this.desiredTarget = vec3.create(0, 0, 0);
@@ -21,6 +22,8 @@ export class CameraController {
     this.desiredPitch = 0.48;
     this.desiredDistance = 225;
     this.desiredFrustumOffsetX = 0;
+    this.desiredFrustumOffsetY = 0;
+    this.panelCollapsed = false;
 
     // Saved overview state to restore when closing planet description
     this.savedOverview = {
@@ -54,8 +57,22 @@ export class CameraController {
 
   setAspect(width, height) {
     this.aspect = Math.max(0.1, width / Math.max(1, height));
-    const wantsOffset = this.mode === 'focus' && width >= 900;
-    this.desiredFrustumOffsetX = wantsOffset ? 0.23 : 0.0;
+    this._updateFrustumOffsets(width);
+  }
+
+  setPanelCollapsed(collapsed, viewportWidth) {
+    this.panelCollapsed = collapsed;
+    this._updateFrustumOffsets(viewportWidth);
+  }
+
+  _updateFrustumOffsets(width) {
+    if (this.mode !== 'focus') {
+      this.desiredFrustumOffsetX = 0.0;
+      this.desiredFrustumOffsetY = 0.0;
+      return;
+    }
+    this.desiredFrustumOffsetX = width >= 900 ? 0.23 : 0.0;
+    this.desiredFrustumOffsetY = width < 900 && !this.panelCollapsed ? 0.25 : 0.0;
   }
 
   focusBody(body, worldPos, viewportWidth) {
@@ -97,14 +114,17 @@ export class CameraController {
       this.desiredPitch = body.ringTexture ? 0.34 : 0.24;
     }
 
-    this.desiredDistance = body.focusDistance || body.radius * 3.8;
+    const portraitScale =
+      this.aspect < 0.85 ? clamp(0.85 / Math.max(0.45, this.aspect), 1.0, 1.85) : 1.0;
+    this.desiredDistance = (body.focusDistance || body.radius * 3.8) * portraitScale;
     vec3.copy(this.desiredTarget, worldPos);
-    this.desiredFrustumOffsetX = viewportWidth >= 900 ? 0.23 : 0.0;
+    this._updateFrustumOffsets(viewportWidth);
   }
 
   returnToOverview() {
     this.mode = 'overview';
     this.focusedId = null;
+    this.panelCollapsed = false;
     this._minDist = 14;
     this._maxDist = 360;
     this._transitionElapsed = 0;
@@ -117,6 +137,7 @@ export class CameraController {
     // Always zoom out cleanly to show the full solar system
     this.desiredDistance = clamp(Math.max(this.savedOverview.distance, 200), 160, 320);
     this.desiredFrustumOffsetX = 0.0;
+    this.desiredFrustumOffsetY = 0.0;
   }
 
   rotateBy(deltaYaw, deltaPitch) {
@@ -142,6 +163,7 @@ export class CameraController {
     this.pitch = damp(this.pitch, this.desiredPitch, orbitLambda, safeDt);
     this.distance = damp(this.distance, this.desiredDistance, distLambda, safeDt);
     this.frustumOffsetX = damp(this.frustumOffsetX, this.desiredFrustumOffsetX, 5.5, safeDt);
+    this.frustumOffsetY = damp(this.frustumOffsetY, this.desiredFrustumOffsetY, 5.5, safeDt);
 
     if (this._transitionElapsed < this._transitionDuration) {
       this._transitionElapsed = Math.min(this._transitionDuration, this._transitionElapsed + safeDt);
@@ -183,8 +205,9 @@ export class CameraController {
 
     const activeNear = this.mode === 'focus' && this._focusRadius < 0.35 ? 0.02 : 0.1;
     mat4.perspective(this.projection, this.fovRad, this.aspect, activeNear, this.far);
-    // Apply subtle horizontal frustum shift when side drawer is open on desktop
+    // Apply subtle frustum shift so drawer/bottom-sheet never covers the focused body
     this.projection[8] += this.frustumOffsetX;
+    this.projection[9] -= this.frustumOffsetY;
 
     mat4.multiply(this.viewProj, this.projection, this.view);
     mat4.invert(this.invViewProj, this.viewProj);
