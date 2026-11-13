@@ -7,6 +7,7 @@ export class SpaceAudioController {
     this.audio = new Audio(src);
     this.audio.loop = true;
     this.audio.preload = 'metadata';
+    this.audio.setAttribute('playsinline', '');
     this.audio.volume = 0;
 
     this.targetVolume = 0.42;
@@ -23,9 +24,12 @@ export class SpaceAudioController {
   }
 
   async tryAutoStart() {
-    if (this.hasInteracted || this.userMuted || this.isPlaying) return;
-    this.hasInteracted = true;
-    await this.play();
+    if (this.hasInteracted || this.userMuted || this.isPlaying) return false;
+    const ok = await this.play();
+    if (ok) {
+      this.hasInteracted = true;
+    }
+    return ok;
   }
 
   async play() {

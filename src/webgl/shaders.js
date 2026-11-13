@@ -16,7 +16,7 @@ out vec2 vTexCoord;
 void main() {
   vTexCoord = aTexCoord;
   vec4 pos = uProjection * uViewNoTranslate * vec4(aPosition * 600.0, 1.0);
-  gl_Position = pos.xyww;
+  gl_Position = vec4(pos.xy, pos.w * 0.9999, pos.w);
 }
 `;
 
@@ -56,7 +56,7 @@ void main() {
   vColor = aColor;
   vTwinkle = 0.75 + 0.25 * sin(uTime * 1.4 + aPhase);
   vec4 pos = uProjection * uViewNoTranslate * vec4(aPosition, 1.0);
-  gl_Position = pos.xyww;
+  gl_Position = vec4(pos.xy, pos.w * 0.9999, pos.w);
   gl_PointSize = aSize * uPixelRatio;
 }
 `;
@@ -580,13 +580,15 @@ precision highp float;
 
 in vec2 vUV;
 uniform sampler2D uSceneTex;
+uniform float uThresholdLow;
+uniform float uThresholdHigh;
 
 out vec4 fragColor;
 
 void main() {
   vec3 col = texture(uSceneTex, vUV).rgb;
   float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-  float soft = smoothstep(0.82, 1.35, lum);
+  float soft = smoothstep(uThresholdLow, uThresholdHigh, lum);
   fragColor = vec4(col * soft, 1.0);
 }
 `;

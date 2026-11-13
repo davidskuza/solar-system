@@ -234,14 +234,33 @@ let lastPinchDist = 0;
 
 function handleResize() {
   renderer.resize();
-  camera.setAspect(window.innerWidth, window.innerHeight);
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width > 0 ? rect.width : window.innerWidth;
+  const h = rect.height > 0 ? rect.height : window.innerHeight;
+  camera.setAspect(w, h);
 }
 
 window.addEventListener('resize', handleResize);
+window.addEventListener('orientationchange', () => setTimeout(handleResize, 120));
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', handleResize);
+}
+
+// Prevent iOS Safari proprietary pinch-zoom page gestures on the WebGL viewport
+for (const evName of ['gesturestart', 'gesturechange', 'gestureend']) {
+  canvas.addEventListener(evName, (e) => e.preventDefault(), { passive: false });
+}
 
 canvas.addEventListener('pointerdown', (e) => {
-  audio.tryAutoStart().then(syncAudioUI);
-  canvas.setPointerCapture(e.pointerId);
+  if (e.isPrimary && activePointers.size > 1) {
+    activePointers.clear();
+    lastPinchDist = 0;
+  }
+  if (e.pointerType === 'mouse' && canvas.setPointerCapture) {
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {}
+  }
   activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
   if (activePointers.size === 1) {
@@ -260,11 +279,11 @@ canvas.addEventListener('pointermove', (e) => {
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   }
 
-  if (activePointers.size === 2) {
+  if (activePointers.size >= 2) {
     const pts = [...activePointers.values()];
     const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-    if (lastPinchDist > 0) {
-      const ratio = lastPinchDist / Math.max(1, dist);
+    if (lastPinchDist > 0 && dist > 0) {
+      const ratio = lastPinchDist / dist;
       camera.zoomBy(ratio);
     }
     lastPinchDist = dist;
@@ -279,7 +298,8 @@ canvas.addEventListener('pointermove', (e) => {
     return;
   }
 
-  // Hover ray-picking
+  // Hover ray-picking on mouse only (avoid sticky hover on iOS touch)
+  if (e.pointerType !== 'mouse') return;
   const rect = canvas.getBoundingClientRect();
   const ray = screenToWorldRay(e.clientX, e.clientY, rect, camera.invViewProj, camera.position);
   const hit = renderer.pickBody(ray.origin, ray.dir, camera.distance, intersectRaySphere);
@@ -297,13 +317,20 @@ canvas.addEventListener('pointerup', (e) => {
   activePointers.delete(e.pointerId);
   if (activePointers.size < 2) lastPinchDist = 0;
 
+  if (e.pointerType === 'mouse' && canvas.releasePointerCapture) {
+    try {
+      canvas.releasePointerCapture(e.pointerId);
+    } catch {}
+  }
+
   if (isDragging && activePointers.size === 0) {
     isDragging = false;
     canvas.classList.remove('dragging');
 
     if (wasSingle) {
+      const tapThreshold = e.pointerType === 'touch' ? 14 : 6;
       const moveDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
-      if (moveDist < 6) {
+      if (moveDist < tapThreshold) {
         const rect = canvas.getBoundingClientRect();
         const ray = screenToWorldRay(
           e.clientX,
@@ -319,6 +346,14 @@ canvas.addEventListener('pointerup', (e) => {
       }
     }
   }
+});
+
+// iOS Safari requires HTMLMediaElement.play() inside touchend or click
+canvas.addEventListener('touchend', () => {
+  audio.tryAutoStart().then(syncAudioUI);
+});
+canvas.addEventListener('click', () => {
+  audio.tryAutoStart().then(syncAudioUI);
 });
 
 canvas.addEventListener('pointercancel', (e) => {

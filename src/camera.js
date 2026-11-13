@@ -115,7 +115,7 @@ export class CameraController {
     }
 
     const portraitScale =
-      this.aspect < 0.85 ? clamp(0.85 / Math.max(0.45, this.aspect), 1.0, 1.85) : 1.0;
+      this.aspect < 0.7 ? 1.18 : 1.0;
     this.desiredDistance = (body.focusDistance || body.radius * 3.8) * portraitScale;
     vec3.copy(this.desiredTarget, worldPos);
     this._updateFrustumOffsets(viewportWidth);
@@ -204,7 +204,12 @@ export class CameraController {
     this.viewNoTranslate[14] = 0;
 
     const activeNear = this.mode === 'focus' && this._focusRadius < 0.35 ? 0.02 : 0.1;
-    mat4.perspective(this.projection, this.fovRad, this.aspect, activeNear, this.far);
+    // Adapt vertical FOV on narrow portrait viewports (iOS/mobile) so horizontal framing stays wide
+    const effectiveFov =
+      this.aspect < 1.0
+        ? 2 * Math.atan(Math.tan(this.fovRad * 0.5) / Math.max(0.5, this.aspect * 1.12))
+        : this.fovRad;
+    mat4.perspective(this.projection, effectiveFov, this.aspect, activeNear, this.far);
     // Apply subtle frustum shift so drawer/bottom-sheet never covers the focused body
     this.projection[8] += this.frustumOffsetX;
     this.projection[9] -= this.frustumOffsetY;

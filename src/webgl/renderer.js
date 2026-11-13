@@ -57,8 +57,12 @@ export class SolarSystemRenderer {
     this.hasFloatFBO = Boolean(
       gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float')
     );
+    gl.getExtension('OES_texture_half_float_linear');
+    gl.getExtension('OES_texture_float_linear');
 
-    this.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    this.useFloatFBO = this.hasFloatFBO;
+    this.usePostProcess = true;
+    this.pixelRatio = Math.min(window.devicePixelRatio || 1, window.innerWidth < 900 ? 1.5 : 2);
     this.width = 1;
     this.height = 1;
 
@@ -183,13 +187,14 @@ export class SolarSystemRenderer {
   }
 
   resize() {
-    const gl = this.gl;
-    this.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    this.pixelRatio = Math.min(window.devicePixelRatio || 1, window.innerWidth < 900 ? 1.5 : 2);
     const rect = this.canvas.getBoundingClientRect();
-    const w = Math.max(1, Math.floor(rect.width * this.pixelRatio));
-    const h = Math.max(1, Math.floor(rect.height * this.pixelRatio));
+    const cssW = rect.width > 0 ? rect.width : window.innerWidth;
+    const cssH = rect.height > 0 ? rect.height : window.innerHeight;
+    const w = Math.max(1, Math.floor(cssW * this.pixelRatio));
+    const h = Math.max(1, Math.floor(cssH * this.pixelRatio));
 
-    if (w === this.width && h === this.height && this.fbos) return;
+    if (w === this.width && h === this.height && (this.fbos || !this.usePostProcess)) return;
     this.width = w;
     this.height = h;
     this.canvas.width = w;
@@ -198,20 +203,25 @@ export class SolarSystemRenderer {
     this._createFBOs(w, h);
   }
 
-  _createFBOs(w, h) {
+  _deleteFBOs() {
     const gl = this.gl;
-    if (this.fbos) {
+    if (!this.fbos) return;
+    if (this.fbos.scene) {
       gl.deleteFramebuffer(this.fbos.scene.fbo);
       gl.deleteTexture(this.fbos.scene.tex);
       gl.deleteRenderbuffer(this.fbos.scene.depth);
-      for (const b of this.fbos.bloom) {
-        gl.deleteFramebuffer(b.fbo);
-        gl.deleteTexture(b.tex);
-      }
     }
+    for (const b of this.fbos.bloom || []) {
+      gl.deleteFramebuffer(b.fbo);
+      gl.deleteTexture(b.tex);
+    }
+    this.fbos = null;
+  }
 
-    const internalFormat = this.hasFloatFBO ? gl.RGBA16F : gl.RGBA8;
-    const type = this.hasFloatFBO ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+  _tryBuildFBOs(w, h, useFloat, depthFormat) {
+    const gl = this.gl;
+    const internalFormat = useFloat ? gl.RGBA16F : gl.RGBA8;
+    const type = useFloat ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
 
     const makeColorTex = (tw, th) => {
       const tex = gl.createTexture();
@@ -224,7 +234,6 @@ export class SolarSystemRenderer {
       return tex;
     };
 
-    // Main scene FBO with depth buffer
     const sceneFbo = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo);
     const sceneTex = makeColorTex(w, h);
@@ -232,10 +241,11 @@ export class SolarSystemRenderer {
 
     const depthRb = gl.createRenderbuffer();
     gl.bindRenderbuffer(gl.RENDERBUFFER, depthRb);
-    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.renderbufferStorage(gl.RENDERBUFFER, depthFormat, w, h);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthRb);
 
-    // Half-res ping-pong bloom FBOs
+    const sceneOk = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+
     const bw = Math.max(2, Math.floor(w / 2));
     const bh = Math.max(2, Math.floor(h / 2));
     const bloom = [0, 1].map(() => {
@@ -243,14 +253,54 @@ export class SolarSystemRenderer {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       const tex = makeColorTex(bw, bh);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-      return { fbo, tex, width: bw, height: bh };
+      const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+      return { fbo, tex, width: bw, height: bh, ok };
     });
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.fbos = {
+
+    if (!sceneOk || bloom.some((b) => !b.ok)) {
+      gl.deleteFramebuffer(sceneFbo);
+      gl.deleteTexture(sceneTex);
+      gl.deleteRenderbuffer(depthRb);
+      for (const b of bloom) {
+        gl.deleteFramebuffer(b.fbo);
+        gl.deleteTexture(b.tex);
+      }
+      return null;
+    }
+
+    return {
       scene: { fbo: sceneFbo, tex: sceneTex, depth: depthRb, width: w, height: h },
       bloom,
     };
+  }
+
+  _createFBOs(w, h) {
+    const gl = this.gl;
+    this._deleteFBOs();
+
+    const attempts = [];
+    if (this.hasFloatFBO) {
+      attempts.push({ useFloat: true, depth: gl.DEPTH_COMPONENT24 });
+      attempts.push({ useFloat: true, depth: gl.DEPTH_COMPONENT16 });
+    }
+    attempts.push({ useFloat: false, depth: gl.DEPTH_COMPONENT24 });
+    attempts.push({ useFloat: false, depth: gl.DEPTH_COMPONENT16 });
+
+    for (const cfg of attempts) {
+      const built = this._tryBuildFBOs(w, h, cfg.useFloat, cfg.depth);
+      if (built) {
+        this.fbos = built;
+        this.useFloatFBO = cfg.useFloat;
+        this.usePostProcess = true;
+        return;
+      }
+    }
+
+    this.useFloatFBO = false;
+    this.usePostProcess = false;
+    console.warn('FBO post-processing unsupported; rendering directly to default framebuffer.');
   }
 
   updateSimulation(simTime, dt) {
@@ -305,8 +355,8 @@ export class SolarSystemRenderer {
   render(camera, simTime, realTime) {
     const gl = this.gl;
 
-    // 1. Render full 3D scene into offscreen HDR FBO
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbos.scene.fbo);
+    // 1. Render full 3D scene into offscreen HDR FBO (or directly to screen if unsupported)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.usePostProcess ? this.fbos.scene.fbo : null);
     gl.viewport(0, 0, this.width, this.height);
     gl.clearColor(0.005, 0.007, 0.015, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -318,6 +368,8 @@ export class SolarSystemRenderer {
     this._renderPlanets(camera, simTime);
     this._renderSpacecraft(camera);
     this._renderCoronaAndCloudsAndRings(camera, simTime, realTime);
+
+    if (!this.usePostProcess) return;
 
     // 2. Bloom bright pass
     const bloomA = this.fbos.bloom[0];
@@ -334,6 +386,8 @@ export class SolarSystemRenderer {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.fbos.scene.tex);
     gl.uniform1i(brightProg.uniforms.uSceneTex, 0);
+    gl.uniform1f(brightProg.uniforms.uThresholdLow, this.useFloatFBO ? 0.82 : 0.65);
+    gl.uniform1f(brightProg.uniforms.uThresholdHigh, this.useFloatFBO ? 1.35 : 0.98);
     gl.bindVertexArray(this.geometries.quad.vao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
