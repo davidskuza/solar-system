@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Solar System Observatory — Raw WebGL</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <canvas id="gl-canvas"></canvas>
+
+    <!-- 3D Projected Planet Labels -->
+    <div id="labels-layer" class="labels-layer" aria-hidden="true"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-screen" class="loading-screen">
+      <div class="loading-card">
+        <div class="loading-orbit">
+          <span class="loading-sun"></span>
+          <span class="loading-planet"></span>
+        </div>
+        <h1>Solar System Observatory</h1>
+        <p id="loading-status">Initializing WebGL2 shaders &amp; planetary maps…</p>
+        <div class="progress-track">
+          <div id="loading-bar" class="progress-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Controls Bar -->
+    <header class="hud-top">
+      <div class="brand-cluster glass-pill">
+        <span class="brand-dot"></span>
+        <div class="brand-text">
+          <span class="brand-title">SOLAR SYSTEM</span>
+          <span class="brand-sub">RAW WEBGL2 OBSERVATORY</span>
+        </div>
+      </div>
+
+      <div class="controls-cluster">
+        <div class="glass-pill sim-controls" role="group" aria-label="Simulation speed">
+          <button id="btn-play-pause" class="icon-btn" title="Pause / Resume simulation">
+            <span id="icon-play-pause">❚❚</span>
+          </button>
+          <div class="speed-pills" id="speed-pills">
+            <button data-speed="0.3" class="speed-btn">0.3×</button>
+            <button data-speed="1" class="speed-btn active">1×</button>
+            <button data-speed="4" class="speed-btn">4×</button>
+            <button data-speed="12" class="speed-btn">12×</button>
+          </div>
+        </div>
+
+        <div class="glass-pill toggle-controls">
+          <button id="btn-orbits" class="toggle-btn active" title="Toggle orbital paths">
+            Orbits
+          </button>
+          <button id="btn-labels" class="toggle-btn active" title="Toggle body labels">
+            Labels
+          </button>
+        </div>
+
+        <div class="glass-pill audio-controls">
+          <button id="btn-audio" class="audio-btn" title="Toggle ambient space soundtrack">
+            <span class="eq-bars" aria-hidden="true">
+              <i></i><i></i><i></i>
+            </span>
+            <span id="audio-label">Soundtrack</span>
+          </button>
+          <input
+            id="audio-volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.02"
+            value="0.42"
+            aria-label="Soundtrack volume"
+          />
+        </div>
+      </div>
+    </header>
+
+    <!-- Planet Description Drawer -->
+    <aside
+      id="planet-panel"
+      class="planet-panel"
+      aria-hidden="true"
+      aria-labelledby="panel-name"
+    >
+      <div class="panel-header">
+        <div class="panel-badge-row">
+          <span id="panel-classification" class="panel-badge">Terrestrial Planet</span>
+          <button id="btn-close-panel" class="close-btn" title="Close & zoom out (Esc)" aria-label="Close description and zoom out">
+            ✕
+          </button>
+        </div>
+        <div class="panel-title-row">
+          <span id="panel-symbol" class="panel-symbol">♁</span>
+          <h2 id="panel-name">Earth</h2>
+        </div>
+        <p id="panel-tagline" class="panel-tagline"></p>
+      </div>
+
+      <div class="panel-body">
+        <p id="panel-description" class="panel-description"></p>
+
+        <div id="panel-stats" class="stats-grid"></div>
+
+        <div class="fact-card">
+          <div class="fact-label">ASTRONOMICAL HIGHLIGHT</div>
+          <p id="panel-fact" class="fact-text"></p>
+        </div>
+
+        <div id="panel-subnav" class="panel-subnav hidden"></div>
+      </div>
+
+      <div class="panel-footer">
+        <button id="btn-return-overview" class="return-btn">
+          ← Return to Full Solar System
+        </button>
+      </div>
+    </aside>
+
+    <!-- Bottom Quick Navigation -->
+    <footer class="hud-bottom">
+      <nav id="planet-nav" class="planet-nav glass-pill" aria-label="Select celestial body"></nav>
+      <div class="hint-row">
+        <span id="interaction-hint">Drag to orbit · Scroll to zoom · Click any planet to explore</span>
+        <span class="audio-credit">Music: “Ambiment” — Kevin MacLeod (CC BY 4.0)</span>
+      </div>
+    </footer>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
